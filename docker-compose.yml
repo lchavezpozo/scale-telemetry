@@ -1,0 +1,49 @@
+services:
+  # Servicio de telemetría
+  scale-telemetry:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scale-telemetry
+    environment:
+      # Configuración MQTT - Apunta a tu servicio EMQX externo
+      - MQTT_BROKER=${MQTT_BROKER:-localhost}
+      - MQTT_PORT=${MQTT_PORT:-1883}
+      - MQTT_USERNAME=${MQTT_USERNAME:-admin}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-5631699Luis}
+      # Configuración del dispositivo
+      - DEVICE_ID=${DEVICE_ID:-scale-1}
+      # Configuración del puerto serial
+      # Para socat: usa /tmp/ttyV0
+      # Para hardware real: usa /dev/ttyUSB0 o similar
+      - SERIAL_PORT=${SERIAL_PORT:-/tmp/ttyV0}
+      - SERIAL_BAUDRATE=${SERIAL_BAUDRATE:-9600}
+      - SERIAL_TIMEOUT=${SERIAL_TIMEOUT:-1.0}
+    
+    # devices:
+      # NOTA: No funciona con enlaces simbólicos de socat (requiere privileged mode)
+      # Para hardware real, descomenta y ajusta:
+      # - /dev/ttyUSB0:/dev/ttyUSB0
+      # - /dev/ttyACM0:/dev/ttyACM0
+      # - /dev/cu.usbserial-1420:/dev/ttyUSB0
+    
+    # Para usar socat con enlaces simbólicos, necesitamos privileged mode
+    # Para hardware real, cambia a false y usa devices arriba
+    privileged: true
+    
+    restart: unless-stopped
+    
+    # Usar la red del host para acceder a servicios locales como EMQX
+    # Opción 1: network_mode host (más simple si EMQX está en localhost)
+    # network_mode: "host"
+    # Opción 2: Red bridge (si EMQX está en otro contenedor o accesible por IP)
+    networks:
+      - scale-network
+    
+    volumes:
+      - ./logs:/var/log/scale-telemetry
+      - /tmp:/tmp  # Montar /tmp para acceder a los puertos socat
+
+networks:
+  scale-network:
+    driver: bridge

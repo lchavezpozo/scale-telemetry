@@ -1,74 +1,107 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Este archivo provee guía a Claude Code (claude.ai/code) para trabajar con el código de este repositorio.
 
-## Project Overview
+## Descripción del Proyecto
 
-Scale Telemetry is an IoT service that reads weight data from industrial scales via serial port and publishes it via MQTT. It's designed for the "pesanet" platform. Requires Python >= 3.12. Built with Poetry (`pyproject.toml`).
+Scale Telemetry es un servicio IoT que lee datos de peso desde básculas industriales por puerto serial y los publica vía MQTT. Diseñado para la plataforma "pesanet". Requiere Python >= 3.12. Usa Poetry como build backend pero la gestión de dependencias se hace con pip (`pip install -e ".[dev]"`).
 
-## Commands
+## Comandos
 
-### Development Setup
+### Setup inicial
 ```bash
-make setup            # Full initial setup (creates .env, installs deps)
-make dev              # Install with dev dependencies (pip install -e ".[dev]")
+make setup            # Setup completo (crea .env, instala dependencias)
+make dev              # Instala con dependencias de desarrollo (pip install -e ".[dev]")
 ```
 
 ### Testing
 ```bash
-make test             # Run pytest with coverage (HTML report in htmlcov/)
-pytest tests/ -v      # Run tests directly
-pytest tests/test_serial_reader.py -v  # Run single test file
-pytest tests/test_serial_reader.py::test_read_weight -v  # Run single test
+make test             # Ejecuta pytest con cobertura (reporte HTML en htmlcov/)
+pytest tests/ -v      # Ejecutar tests directamente
+pytest tests/test_serial_reader.py -v  # Ejecutar un archivo de tests
+pytest tests/test_serial_reader.py::TestScaleReader::test_read_weight_success -v  # Ejecutar un test específico
 ```
 
-### Linting & Formatting
+### Linting y Formateo
 ```bash
-make lint             # Run flake8 (max-line-length=100), black --check, mypy
-make format           # Format with black (default 88 char line length)
+make lint             # Ejecuta flake8 (max-line-length=100), black --check, mypy
+make format           # Formatea con black (88 caracteres por línea)
 ```
 
-### Running & Docker
+### Ejecución local
 ```bash
-make run              # Run service locally
-make up / make down   # Docker compose up/down
-make simulator-pty    # Python PTY-based scale simulator (no hardware needed)
+make run              # Ejecuta el servicio (requiere puerto serial + broker MQTT)
+make simulator-pty    # Simulador de báscula con PTY de Python (sin hardware)
+make check-ports      # Lista puertos seriales disponibles
 ```
+
+### Docker - Producción
+```bash
+make up               # Inicia servicios con docker-compose.yml
+make down             # Detiene servicios
+make restart          # Reinicia servicios
+make build            # Construye las imágenes Docker
+make logs             # Muestra logs de todos los servicios
+make status           # Muestra estado de los contenedores
+make docker-shell-telemetry  # Abre shell en el contenedor de telemetría
+make docker-clean     # Limpia contenedores, volúmenes e imágenes
+```
+
+`docker-compose.yml` levanta solo el servicio `scale-telemetry`. Espera un broker MQTT externo (EMQX) y un puerto serial real o socat. Usa `privileged: true` para acceder a puertos serial. La red es bridge (`scale-network`).
+
+### Docker - Desarrollo (con simulador)
+```bash
+docker-compose -f docker-compose.dev.yml up --build    # Levanta con simulador de báscula
+docker-compose -f docker-compose.dev.yml down           # Detiene todo
+```
+
+`docker-compose.dev.yml` incluye un contenedor `scale-simulator` (Alpine) que genera datos de peso via named pipe (FIFO) en `/shared/scale_pipe`. El servicio de telemetría usa `entrypoint-dev.sh` para leer desde ese pipe. Variables del simulador:
+- `SIMULATOR_RANDOM=true/false` — peso aleatorio o fijo
+- `SIMULATOR_WEIGHT=120` — peso fijo en kg (cuando `SIMULATOR_RANDOM=false`)
+- El broker MQTT apunta a `host.docker.internal:8083` (WebSocket) para alcanzar EMQX en el host
 
 ### Testing MQTT
 ```bash
-make mqtt-test        # Send get_weight command (requires mosquitto_pub)
-make mqtt-subscribe   # Subscribe to responses
-make mqtt-client-test # Run Python test client
+make mqtt-test        # Envía comando get_weight (requiere mosquitto_pub)
+make mqtt-subscribe   # Suscribirse a respuestas
+make mqtt-client-test # Ejecuta cliente de prueba Python (examples/mqtt_test_client.py)
 ```
 
-## Architecture
+### Otros
+```bash
+bash docker-run.sh    # Script interactivo de setup Docker (crea .env, verifica puertos, construye y levanta)
+make clean            # Limpia __pycache__, .pytest_cache, htmlcov, logs
+```
+
+## Arquitectura
 
 ```
 ScaleTelemetryService (main.py)
        │
        ├── ScaleReader (serial_reader.py)
-       │     └── Reads weight from serial port using pyserial
-       │     └── Parses weight values with regex (extracts first number from line)
+       │     └── Lee peso del puerto serial con pyserial
+       │     └── Parsea valores con regex (extrae primer número de la línea)
        │
        └── ScaleMQTTClient (mqtt_client.py)
-             └── Subscribes to command topic, publishes responses
-             └── Uses paho-mqtt with WebSocket transport (ws://<broker>:<port>/mqtt)
-             └── Callback pattern: _on_connect, _on_message, _on_disconnect
+             └── Se suscribe al tópico de comandos, publica respuestas
+             └── Usa paho-mqtt con transporte WebSocket (ws://<broker>:<port>/mqtt)
+             └── Patrón de callbacks: _on_connect, _on_message, _on_disconnect
 ```
 
-**MQTT Transport:** WebSocket (not raw TCP). Client connects to `ws://<broker>:<port>/mqtt`.
+**Transporte MQTT:** WebSocket (no TCP raw). El cliente se conecta a `ws://<broker>:<port>/mqtt`.
 
-**MQTT Topics:**
-- Command: `pesanet/devices/{device_id}/command` (listens for `{"command": "get_weight"}`)
-- Response: `pesanet/devices/{device_id}/response` (publishes weight JSON with `deviceId`, `weight`, `status`, `message`, `timestamp`)
+**Tópicos MQTT:**
+- Comando: `pesanet/devices/{device_id}/command` (escucha `{"command": "get_weight"}`)
+- Respuesta: `pesanet/devices/{device_id}/response` (publica JSON con `deviceId`, `weight`, `status`, `message`, `timestamp`)
 
-**Configuration:** Via environment variables or `.env` file. Dataclasses in `config.py` (`MQTTConfig`, `SerialConfig`) read env vars at import time with `os.getenv`.
+**Configuración:** Via variables de entorno o archivo `.env`. Dataclasses en `config.py` (`MQTTConfig`, `SerialConfig`) leen env vars al importarse con `os.getenv`. Nota: `config.py` tiene credenciales por defecto hardcodeadas — siempre sobreescribir via env vars.
 
-**Flow:** MQTT message arrives -> `_on_message` parses JSON -> dispatches to `_handle_get_weight` -> calls `weight_callback` (which calls `ScaleReader.read_weight()`) -> publishes response JSON.
+**Flujo:** Mensaje MQTT llega -> `_on_message` parsea JSON -> despacha a `_handle_get_weight` -> llama `weight_callback` (que llama a `ScaleReader.read_weight()`) -> publica respuesta JSON.
 
-## Codebase Conventions
+## Convenciones del Código
 
-- Code comments, docstrings, and log messages are in **Spanish**. Maintain this convention.
-- `src/` layout with `scale_telemetry` package.
-- Configuration uses dataclasses with env var defaults (no config files).
+- Comentarios, docstrings y mensajes de log están en **español**. Mantener esta convención.
+- Layout `src/` con paquete `scale_telemetry`.
+- Configuración usa dataclasses con valores por defecto desde env vars (sin archivos de config).
+- Tests usan `pytest` con `unittest.mock` (no fixtures de `pytest-mock`). Se organizan en clases (ej: `TestScaleReader`) con fixtures de pytest para config y mocks.
+- Dependencias de hardware (puerto serial, broker MQTT) se mockean en tests via `@patch` y `MagicMock`.

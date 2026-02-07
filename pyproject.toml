@@ -1,0 +1,31 @@
+[project]
+name = "scale-telemetry"
+version = "0.1.0"
+description = "Sistema de telemetría para básculas con MQTT"
+authors = [
+    {name = "Luis Chavez",email = "lchavezpozo@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pyserial>=3.5",
+    "paho-mqtt>=2.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+]
+
+[project.scripts]
+scale-telemetry = "scale_telemetry.main:main"
+
+[tool.poetry]
+packages = [{include = "scale_telemetry", from = "src"}]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

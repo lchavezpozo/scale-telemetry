@@ -1,0 +1,83 @@
+services:
+  # Simulador de báscula con named pipe (FIFO)
+  scale-simulator:
+    image: alpine:latest
+    container_name: scale-simulator
+    environment:
+      - SIMULATOR_RANDOM=${SIMULATOR_RANDOM:-false}
+      - SIMULATOR_WEIGHT=${SIMULATOR_WEIGHT:-120}
+    command: >
+      sh -c "
+        echo '=== Instalando bash ===' &&
+        apk add --no-cache bash coreutils &&
+        
+        echo '=== Creando named pipe (FIFO) ===' &&
+        rm -f /shared/scale_pipe &&
+        mkfifo /shared/scale_pipe &&
+        chmod 666 /shared/scale_pipe &&
+        
+        echo '=== Verificando pipe ===' &&
+        ls -la /shared/scale_pipe &&
+        
+        echo '=== LISTO - Iniciando simulador de báscula ===' &&
+        echo \"Modo aleatorio: \$${SIMULATOR_RANDOM}\" &&
+        echo \"Peso fijo: \$${SIMULATOR_WEIGHT} kg\" &&
+        while true; do
+          if [ \"\$${SIMULATOR_RANDOM}\" = \"true\" ]; then
+            peso=$$(awk 'BEGIN{srand(); printf \"%.1f\", rand()*150}')
+          else
+            peso=$$(awk -v value=\"\$${SIMULATOR_WEIGHT}\" 'BEGIN{printf \"%.1f\", value}')
+          fi
+          echo \"\$$peso kg\" > /shared/scale_pipe &
+          echo \"[\$$(date '+%H:%M:%S')] Enviado: \$$peso kg\"
+          sleep 1
+        done
+      "
+    volumes:
+      - serial-ports:/shared
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "test", "-p", "/shared/scale_pipe"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # Servicio de telemetría
+  scale-telemetry:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scale-telemetry
+    privileged: true
+    depends_on:
+      scale-simulator:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/app/entrypoint-dev.sh"]
+    environment:
+      # Configuración MQTT - Usando WebSocket (ws://localhost:8083/mqtt)
+      # EMQX WebSocket: puerto 8083, path /mqtt
+      # localhost NO funciona desde Docker, usa host.docker.internal
+      - MQTT_BROKER=${MQTT_BROKER:-host.docker.internal}
+      - MQTT_PORT=${MQTT_PORT:-8083}
+      - MQTT_USERNAME=${MQTT_USERNAME:-admin}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-5631699Luis}
+      # Configuración del dispositivo
+      - DEVICE_ID=${DEVICE_ID:-scale-1}
+      # SERIAL_PORT será configurado por el entrypoint
+      - SERIAL_BAUDRATE=${SERIAL_BAUDRATE:-9600}
+      - SERIAL_TIMEOUT=${SERIAL_TIMEOUT:-1.0}
+    networks:
+      - scale-network
+    volumes:
+      - ./logs:/var/log/scale-telemetry
+      - ./entrypoint-dev.sh:/app/entrypoint-dev.sh:ro
+      - serial-ports:/shared
+    restart: unless-stopped
+
+networks:
+  scale-network:
+    driver: bridge
+
+volumes:
+  serial-ports:
