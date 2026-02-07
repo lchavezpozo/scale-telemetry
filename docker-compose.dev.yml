@@ -54,19 +54,14 @@ services:
       scale-simulator:
         condition: service_healthy
     entrypoint: ["/bin/bash", "/app/entrypoint-dev.sh"]
+    env_file:
+      - .env
     environment:
-      # Configuración MQTT - Usando WebSocket (ws://localhost:8083/mqtt)
-      # EMQX WebSocket: puerto 8083, path /mqtt
+      # Sobreescrituras para desarrollo con Docker
       # localhost NO funciona desde Docker, usa host.docker.internal
       - MQTT_BROKER=${MQTT_BROKER:-host.docker.internal}
       - MQTT_PORT=${MQTT_PORT:-8083}
-      - MQTT_USERNAME=${MQTT_USERNAME:-admin}
-      - MQTT_PASSWORD=${MQTT_PASSWORD:-5631699Luis}
-      # Configuración del dispositivo
-      - DEVICE_ID=${DEVICE_ID:-scale-1}
       # SERIAL_PORT será configurado por el entrypoint
-      - SERIAL_BAUDRATE=${SERIAL_BAUDRATE:-9600}
-      - SERIAL_TIMEOUT=${SERIAL_TIMEOUT:-1.0}
     networks:
       - scale-network
     volumes:

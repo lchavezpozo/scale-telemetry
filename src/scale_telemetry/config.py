@@ -9,8 +9,8 @@ class MQTTConfig:
     """Configuración MQTT."""
     broker: str = os.getenv("MQTT_BROKER", "localhost")
     port: int = int(os.getenv("MQTT_PORT", "1883"))
-    username: str | None = os.getenv("MQTT_USERNAME", "admin")
-    password: str | None = os.getenv("MQTT_PASSWORD", "5631699Luis")
+    username: str | None = os.getenv("MQTT_USERNAME")
+    password: str | None = os.getenv("MQTT_PASSWORD")
     device_id: str = os.getenv("DEVICE_ID", "scale-1")
     
     @property

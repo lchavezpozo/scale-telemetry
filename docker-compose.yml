@@ -5,20 +5,13 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: scale-telemetry
+    env_file:
+      - .env
     environment:
-      # Configuración MQTT - Apunta a tu servicio EMQX externo
-      - MQTT_BROKER=${MQTT_BROKER:-localhost}
-      - MQTT_PORT=${MQTT_PORT:-1883}
-      - MQTT_USERNAME=${MQTT_USERNAME:-admin}
-      - MQTT_PASSWORD=${MQTT_PASSWORD:-5631699Luis}
-      # Configuración del dispositivo
-      - DEVICE_ID=${DEVICE_ID:-scale-1}
-      # Configuración del puerto serial
+      # Sobreescrituras específicas de Docker (si se necesitan)
       # Para socat: usa /tmp/ttyV0
       # Para hardware real: usa /dev/ttyUSB0 o similar
       - SERIAL_PORT=${SERIAL_PORT:-/tmp/ttyV0}
-      - SERIAL_BAUDRATE=${SERIAL_BAUDRATE:-9600}
-      - SERIAL_TIMEOUT=${SERIAL_TIMEOUT:-1.0}
     
     # devices:
       # NOTA: No funciona con enlaces simbólicos de socat (requiere privileged mode)
