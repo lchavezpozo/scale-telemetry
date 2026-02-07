@@ -3,6 +3,8 @@ services:
   scale-simulator:
     image: alpine:latest
     container_name: scale-simulator
+    env_file:
+      - .env
     environment:
       - SIMULATOR_RANDOM=${SIMULATOR_RANDOM:-false}
       - SIMULATOR_WEIGHT=${SIMULATOR_WEIGHT:-120}
@@ -56,12 +58,6 @@ services:
     entrypoint: ["/bin/bash", "/app/entrypoint-dev.sh"]
     env_file:
       - .env
-    environment:
-      # Sobreescrituras para desarrollo con Docker
-      # localhost NO funciona desde Docker, usa host.docker.internal
-      - MQTT_BROKER=${MQTT_BROKER:-host.docker.internal}
-      - MQTT_PORT=${MQTT_PORT:-8083}
-      # SERIAL_PORT será configurado por el entrypoint
     networks:
       - scale-network
     volumes:

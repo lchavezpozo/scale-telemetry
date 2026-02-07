@@ -11,6 +11,7 @@ class MQTTConfig:
     port: int = int(os.getenv("MQTT_PORT", "1883"))
     username: str | None = os.getenv("MQTT_USERNAME")
     password: str | None = os.getenv("MQTT_PASSWORD")
+    use_ssl: bool = os.getenv("MQTT_USE_SSL", "false").lower() == "true"
     device_id: str = os.getenv("DEVICE_ID", "scale-1")
     
     @property

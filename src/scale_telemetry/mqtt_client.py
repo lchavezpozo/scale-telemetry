@@ -2,6 +2,7 @@
 
 import json
 import logging
+import ssl
 import time
 from typing import Callable, Optional
 
@@ -38,6 +39,10 @@ class ScaleMQTTClient:
         self.client.on_message = self._on_message
         self.client.on_disconnect = self._on_disconnect
         
+        # Configurar SSL/TLS si está habilitado (wss://)
+        if config.use_ssl:
+            self.client.tls_set(tls_version=ssl.PROTOCOL_TLS_CLIENT)
+
         # Configurar autenticación si está disponible
         if config.username and config.password:
             self.client.username_pw_set(config.username, config.password)
@@ -161,17 +166,20 @@ class ScaleMQTTClient:
     def connect(self):
         """Conecta al broker MQTT."""
         try:
+            scheme = "wss" if self.config.use_ssl else "ws"
+            url = f"{scheme}://{self.config.broker}:{self.config.port}/mqtt"
             logger.info(f"=== Intentando conectar a MQTT WebSocket ===")
-            logger.info(f"URL: ws://{self.config.broker}:{self.config.port}/mqtt")
+            logger.info(f"URL: {url}")
+            logger.info(f"SSL: {'habilitado' if self.config.use_ssl else 'deshabilitado'}")
             logger.info(f"Usuario: {self.config.username}")
             logger.info(f"Password: {'***' if self.config.password else 'None'}")
             logger.info(f"========================================")
-            
+
             self.client.connect(self.config.broker, self.config.port, keepalive=60)
-            logger.info(f"✅ Conexión WebSocket iniciada a ws://{self.config.broker}:{self.config.port}/mqtt")
+            logger.info(f"✅ Conexión WebSocket iniciada a {url}")
         except Exception as e:
             logger.error(f"❌ Error al conectar con el broker MQTT WebSocket: {e}")
-            logger.error(f"URL intentada: ws://{self.config.broker}:{self.config.port}/mqtt")
+            logger.error(f"URL intentada: {url}")
             import traceback
             logger.error(traceback.format_exc())
             raise
