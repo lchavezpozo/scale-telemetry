@@ -63,6 +63,7 @@ services:
     volumes:
       - ./logs:/var/log/scale-telemetry
       - ./entrypoint-dev.sh:/app/entrypoint-dev.sh:ro
+      - ./devices.json:/app/devices.json:ro
       - serial-ports:/shared
     restart: unless-stopped
 

@@ -1,0 +1,14 @@
+[
+  {
+    "device_id": "scale-1",
+    "serial_port": "/dev/ttyUSB0",
+    "baudrate": 9600,
+    "timeout": 1.0
+  },
+  {
+    "device_id": "scale-2",
+    "serial_port": "/dev/ttyUSB1",
+    "baudrate": 9600,
+    "timeout": 1.0
+  }
+]
