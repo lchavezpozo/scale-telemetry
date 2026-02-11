@@ -119,9 +119,24 @@ class ScaleReader:
             self.connection.reset_input_buffer()
 
             if self.config.weight_format == "padded":
-                # Formato padded: leer una trama completa hasta \r
-                raw_bytes = self.connection.read_until(b'\r')
-                logger.info(f"Datos crudos padded ({len(raw_bytes)} bytes): {raw_bytes!r}")
+                # Formato padded: leer tramas hasta encontrar una válida.
+                # La báscula puede enviar datos parciales (ej: b'000\r')
+                # antes de una trama completa con el patrón "0 DDDDDDDDDDDD\r.
+                max_intentos = 5
+                for intento in range(1, max_intentos + 1):
+                    raw_bytes = self.connection.read_until(b'\r')
+                    logger.info(
+                        f"Padded intento {intento}/{max_intentos} - "
+                        f"({len(raw_bytes)} bytes): {raw_bytes!r}"
+                    )
+                    if re.search(rb'"0 \d{12}', raw_bytes):
+                        break
+                    logger.info("Trama sin patrón válido, reintentando...")
+                else:
+                    raise ValueError(
+                        f"No se encontró trama válida después de "
+                        f"{max_intentos} intentos"
+                    )
                 weight = parse_padded(raw_bytes)
             else:
                 # Formato standard: leer una línea hasta \n

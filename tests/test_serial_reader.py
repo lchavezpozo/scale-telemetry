@@ -210,7 +210,7 @@ class TestPaddedFormat:
         assert weight == 60.0
 
     def test_read_weight_padded_no_pattern(self, padded_config, mock_serial):
-        """Test que datos sin patrón válido lanzan error."""
+        """Test que datos sin patrón válido lanzan error después de reintentos."""
         mock_conn = MagicMock()
         mock_conn.is_open = True
         mock_conn.read_until.return_value = b'\x80\x02\r'
@@ -219,8 +219,29 @@ class TestPaddedFormat:
         reader = ScaleReader(padded_config)
         reader.connect()
 
-        with pytest.raises(ValueError, match="No se encontró patrón"):
+        with pytest.raises(ValueError, match="No se encontró trama válida"):
             reader.read_weight()
+
+        # Debe haber intentado 5 veces
+        assert mock_conn.read_until.call_count == 5
+
+    def test_read_weight_padded_retry_on_garbage(self, padded_config, mock_serial):
+        """Test que reintenta cuando llega datos parciales antes de trama válida."""
+        mock_conn = MagicMock()
+        mock_conn.is_open = True
+        # Primero llega basura (b'000\r'), luego una trama válida
+        mock_conn.read_until.side_effect = [
+            b'000\r',
+            b'\x80\x02"0 000060000000\r',
+        ]
+        mock_serial.return_value = mock_conn
+
+        reader = ScaleReader(padded_config)
+        reader.connect()
+        weight = reader.read_weight()
+
+        assert weight == 60.0
+        assert mock_conn.read_until.call_count == 2
 
 
 class TestParseFunctions:
