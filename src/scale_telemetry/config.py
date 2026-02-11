@@ -22,6 +22,7 @@ class SerialConfig:
     port: str = "/dev/ttyUSB0"
     baudrate: int = 9600
     timeout: float = 1.0
+    weight_format: str = "standard"
 
 
 @dataclass
@@ -31,6 +32,7 @@ class DeviceConfig:
     serial_port: str
     baudrate: int = 9600
     timeout: float = 1.0
+    weight_format: str = "standard"
 
     @property
     def command_topic(self) -> str:
@@ -48,6 +50,7 @@ class DeviceConfig:
             port=self.serial_port,
             baudrate=self.baudrate,
             timeout=self.timeout,
+            weight_format=self.weight_format,
         )
 
 
@@ -78,6 +81,7 @@ def load_devices(config_path: str | None = None) -> list[DeviceConfig]:
             serial_port=d["serial_port"],
             baudrate=d.get("baudrate", 9600),
             timeout=d.get("timeout", 1.0),
+            weight_format=d.get("weight_format", "standard"),
         )
         for d in data
     ]
