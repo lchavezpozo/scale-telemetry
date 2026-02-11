@@ -34,14 +34,17 @@ def parse_padded(line: str) -> float:
     """
     # Buscar todos los bloques de dígitos consecutivos
     blocks = re.findall(r'\d+', line)
+    logger.info(f"Padded parser - bloques encontrados: {blocks}")
     if not blocks:
         raise ValueError(f"No se encontraron dígitos en: {line}")
 
     # Tomar el bloque más largo (el que contiene los datos del peso)
     data_block = max(blocks, key=len)
+    logger.info(f"Padded parser - bloque seleccionado: '{data_block}' (largo: {len(data_block)})")
 
     # Los primeros 6 dígitos contienen el peso con padding de ceros
     weight_digits = data_block[:6]
+    logger.info(f"Padded parser - dígitos de peso: '{weight_digits}' -> {int(weight_digits)}")
     return float(int(weight_digits))
 
 
@@ -110,9 +113,11 @@ class ScaleReader:
             # Limpia el buffer de entrada
             self.connection.reset_input_buffer()
 
-            # Lee una línea del puerto serial
-            line = self.connection.readline().decode('utf-8', errors='ignore').strip()
-            logger.debug(f"Datos recibidos de báscula: {line}")
+            # Lee los bytes crudos del puerto serial
+            raw_bytes = self.connection.readline()
+            logger.info(f"Datos crudos (bytes): {raw_bytes!r}")
+            line = raw_bytes.decode('utf-8', errors='ignore').strip()
+            logger.info(f"Datos decodificados: '{line}'")
 
             weight = self._parser(line)
             logger.info(f"Peso leído: {weight} kg")
