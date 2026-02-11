@@ -5,6 +5,11 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Cargar variables de entorno desde .env antes de leer os.getenv()
+load_dotenv()
+
 
 @dataclass
 class MQTTConfig:
