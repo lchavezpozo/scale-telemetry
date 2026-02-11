@@ -157,10 +157,10 @@ class TestPaddedFormat:
     """Tests para el formato padded."""
 
     def test_read_weight_padded(self, padded_config, mock_serial):
-        """Test de lectura con formato padded."""
+        """Test de lectura con formato padded (una trama)."""
         mock_conn = MagicMock()
         mock_conn.is_open = True
-        mock_conn.readline.return_value = b'\xc0"0 000060000000000000\n'
+        mock_conn.read_until.return_value = b'\x80\x02"0 000060000000\r'
         mock_serial.return_value = mock_conn
 
         reader = ScaleReader(padded_config)
@@ -172,17 +172,17 @@ class TestPaddedFormat:
     def test_read_weight_padded_various(self, padded_config, mock_serial):
         """Test de lectura padded con varios valores."""
         test_cases = [
-            (b'\xc0"0 000060000000000000\n', 60.0),
-            (b'\xc0"0 000120000000000000\n', 120.0),
-            (b'\xc0"0 000005000000000000\n', 5.0),
-            (b'\xc0"0 000100000000000000\n', 100.0),
-            (b'0 000000000000000000\n', 0.0),
+            (b'\x80\x02"0 000060000000\r', 60.0),
+            (b'\x80\x02"0 000120000000\r', 120.0),
+            (b'\x80\x02"0 000005000000\r', 5.0),
+            (b'\x80\x02"0 000100000000\r', 100.0),
+            (b'\x80\x02"0 000000000000\r', 0.0),
         ]
 
         for input_data, expected_weight in test_cases:
             mock_conn = MagicMock()
             mock_conn.is_open = True
-            mock_conn.readline.return_value = input_data
+            mock_conn.read_until.return_value = input_data
             mock_serial.return_value = mock_conn
 
             reader = ScaleReader(padded_config)
@@ -191,17 +191,35 @@ class TestPaddedFormat:
 
             assert weight == expected_weight, f"Failed for input: {input_data}"
 
-    def test_read_weight_padded_no_digits(self, padded_config, mock_serial):
-        """Test que datos sin dígitos lanzan error."""
+    def test_read_weight_padded_multiple_frames(self, padded_config, mock_serial):
+        """Test que con múltiples tramas toma la última."""
         mock_conn = MagicMock()
         mock_conn.is_open = True
-        mock_conn.readline.return_value = b'\xc0"\n'
+        # Simular múltiples tramas concatenadas (como llega de la báscula real)
+        mock_conn.read_until.return_value = (
+            b'\x80\x02"0 000050000000\r'
+            b'\x80\x02"0 000060000000\r'
+        )
+        mock_serial.return_value = mock_conn
+
+        reader = ScaleReader(padded_config)
+        reader.connect()
+        weight = reader.read_weight()
+
+        # Debe tomar la última trama (60, no 50)
+        assert weight == 60.0
+
+    def test_read_weight_padded_no_pattern(self, padded_config, mock_serial):
+        """Test que datos sin patrón válido lanzan error."""
+        mock_conn = MagicMock()
+        mock_conn.is_open = True
+        mock_conn.read_until.return_value = b'\x80\x02\r'
         mock_serial.return_value = mock_conn
 
         reader = ScaleReader(padded_config)
         reader.connect()
 
-        with pytest.raises(ValueError, match="No se encontraron"):
+        with pytest.raises(ValueError, match="No se encontró patrón"):
             reader.read_weight()
 
 
@@ -221,11 +239,11 @@ class TestParseFunctions:
 
     def test_parse_padded(self):
         """Test de parse_padded con varios formatos."""
-        assert parse_padded("0 000060000000000000") == 60.0
-        assert parse_padded("0 000120000000000000") == 120.0
-        assert parse_padded("0 000000000000000000") == 0.0
+        assert parse_padded(b'\x80\x02"0 000060000000\r') == 60.0
+        assert parse_padded(b'\x80\x02"0 000120000000\r') == 120.0
+        assert parse_padded(b'\x80\x02"0 000000000000\r') == 0.0
 
     def test_parse_padded_invalid(self):
-        """Test que parse_padded lanza error sin dígitos."""
+        """Test que parse_padded lanza error sin patrón válido."""
         with pytest.raises(ValueError):
-            parse_padded("")
+            parse_padded(b'\x80\x02\r')

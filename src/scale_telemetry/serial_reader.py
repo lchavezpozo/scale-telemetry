@@ -25,27 +25,32 @@ def parse_standard(line: str) -> float:
     raise ValueError(f"No se pudo extraer el peso de: {line}")
 
 
-def parse_padded(line: str) -> float:
+def parse_padded(raw_data: bytes) -> float:
     """
-    Formato con padding de ceros: bloque de 18 dígitos donde los primeros
-    6 representan el peso entero con ceros a la izquierda.
-    Soporta: '�"0 000060000000000000' -> 60.0, '000120000000000000' -> 120.0
-    Busca el bloque más largo de dígitos consecutivos en la línea.
+    Formato con padding de ceros para básculas industriales.
+    Cada trama tiene el patrón: [header]"0 DDDDDDDDDDDD\r
+    donde D son 12 dígitos con el peso (ceros a la izquierda).
+    Extrae la última trama válida (lectura más reciente).
     """
-    # Buscar todos los bloques de dígitos consecutivos
-    blocks = re.findall(r'\d+', line)
-    logger.info(f"Padded parser - bloques encontrados: {blocks}")
-    if not blocks:
-        raise ValueError(f"No se encontraron dígitos en: {line}")
+    # Buscar todas las tramas con el patrón "0 seguido de 12 dígitos
+    matches = re.findall(rb'"0 (\d{12})', raw_data)
+    logger.info(f"Padded parser - tramas encontradas: {len(matches)}")
 
-    # Tomar el bloque más largo (el que contiene los datos del peso)
-    data_block = max(blocks, key=len)
-    logger.info(f"Padded parser - bloque seleccionado: '{data_block}' (largo: {len(data_block)})")
+    if not matches:
+        raise ValueError(
+            f"No se encontró patrón de trama válido en los datos "
+            f"({len(raw_data)} bytes)"
+        )
+
+    # Tomar la última trama (lectura más reciente)
+    last_frame = matches[-1].decode('ascii')
+    logger.info(f"Padded parser - última trama: '{last_frame}'")
 
     # Los primeros 6 dígitos contienen el peso con padding de ceros
-    weight_digits = data_block[:6]
-    logger.info(f"Padded parser - dígitos de peso: '{weight_digits}' -> {int(weight_digits)}")
-    return float(int(weight_digits))
+    weight_digits = last_frame[:6]
+    weight = float(int(weight_digits))
+    logger.info(f"Padded parser - peso extraído: {weight}")
+    return weight
 
 
 PARSERS = {
@@ -113,13 +118,19 @@ class ScaleReader:
             # Limpia el buffer de entrada
             self.connection.reset_input_buffer()
 
-            # Lee los bytes crudos del puerto serial
-            raw_bytes = self.connection.readline()
-            logger.info(f"Datos crudos (bytes): {raw_bytes!r}")
-            line = raw_bytes.decode('utf-8', errors='ignore').strip()
-            logger.info(f"Datos decodificados: '{line}'")
+            if self.config.weight_format == "padded":
+                # Formato padded: leer una trama completa hasta \r
+                raw_bytes = self.connection.read_until(b'\r')
+                logger.info(f"Datos crudos padded ({len(raw_bytes)} bytes): {raw_bytes!r}")
+                weight = parse_padded(raw_bytes)
+            else:
+                # Formato standard: leer una línea hasta \n
+                raw_bytes = self.connection.readline()
+                logger.info(f"Datos crudos (bytes): {raw_bytes!r}")
+                line = raw_bytes.decode('utf-8', errors='ignore').strip()
+                logger.info(f"Datos decodificados: '{line}'")
+                weight = parse_standard(line)
 
-            weight = self._parser(line)
             logger.info(f"Peso leído: {weight} kg")
             return weight
 
